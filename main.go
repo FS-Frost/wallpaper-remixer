@@ -55,7 +55,6 @@ func main() {
 }
 
 func remixWallpaper() {
-	rand.Seed(time.Now().UnixNano())
 	state, err := loadState()
 	checkErr(err)
 
@@ -109,22 +108,13 @@ func remixWallpaper() {
 	}
 
 	if len(images) == 0 {
-		logToFile("No new images found in %s", state.ImagesDir)
-		os.Exit(0)
-	}
-
-	if len(images) == 0 {
 		images = append(images, entries[0])
 		state.ImagePaths = make(map[string]bool)
 		logToFile("Used images cleared")
 	}
 
 	randomImageIndex := rand.Intn(len(images))
-	if randomImageIndex > 0 && randomImageIndex == len(entries) {
-		randomImageIndex--
-	}
-
-	randomImage := entries[randomImageIndex]
+	randomImage := images[randomImageIndex]
 	logToFile("New background image: %s", randomImage.Name())
 
 	randomImagePath := filepath.Join(state.ImagesDir, randomImage.Name())
@@ -179,13 +169,6 @@ func logToFile(format string, a ...interface{}) error {
 	}
 
 	filePath := filepath.Join(cwd, "logs.log")
-	err = os.MkdirAll("logs", os.ModePerm)
-	if err != nil {
-		errMsg := fmt.Sprintf("error creating logs directory: %v", err)
-		fmt.Println(errMsg)
-		return fmt.Errorf(errMsg)
-	}
-
 	f, err := os.OpenFile(filePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		errMsg := fmt.Sprintf("error opening file <%s>: %v", filePath, err)
