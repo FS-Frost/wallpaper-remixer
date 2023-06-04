@@ -78,11 +78,7 @@ func remixWallpaper() {
 		os.Exit(1)
 	}
 
-	now := time.Now()
-	if now.Sub(state.Time) > time.Hour*24 {
-		clearLogFile()
-	}
-
+	clearLogFileIfNeeded()
 	state.Time = time.Now()
 	entries, err := os.ReadDir(state.ImagesDir)
 	checkErr(err)
@@ -183,20 +179,29 @@ func logToFile(format string, a ...interface{}) error {
 	return nil
 }
 
-func clearLogFile() error {
+func clearLogFileIfNeeded() {
 	appPath, err := os.Executable()
 	cwd := filepath.Dir(appPath)
 	if err != nil {
-		return fmt.Errorf("error getting current working directory: %v", err)
+		logToFile("error getting current working directory: %v", err)
 	}
 
 	filePath := filepath.Join(cwd, "logs.log")
-	err = os.Remove(filePath)
+	info, err := os.Stat(filePath)
 	if err != nil {
-		return fmt.Errorf("error removing logs: %v", err)
+		return
 	}
 
-	return nil
+	isUnderOneMegaByte := info.Size() < 1000000
+	if isUnderOneMegaByte {
+		return
+	}
+
+	err = os.Remove(filePath)
+	if err != nil {
+		logToFile("error removing log: %v", err)
+		return
+	}
 }
 
 func loadState() (*State, error) {
