@@ -1,6 +1,6 @@
 # wallpaper-remixer
 
-CLI tool to remix and sync the desktop and browser wallpapers.
+CLI tool to remix and sync desktop and browser wallpapers.
 
 ## How to use
 
