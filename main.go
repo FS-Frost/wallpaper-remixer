@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	_log "log"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 
@@ -82,38 +82,24 @@ func remixWallpaper() {
 	state.Time = time.Now()
 	entries, err := os.ReadDir(state.ImagesDir)
 	checkErr(err)
-	images := []fs.DirEntry{}
+
 	if len(entries) == 0 {
 		logToFile("No images found on: %s", state.ImagesDir)
 		os.Exit(0)
 	}
 
-	for _, entry := range entries {
-		info, err := entry.Info()
-		checkErr(err)
-
-		if !info.Mode().IsRegular() {
-			continue
-		}
-
-		if state.ImagePaths[info.Name()] {
-			continue
-		}
-
-		images = append(images, entry)
-	}
-
+	images := getImages(state.ImagePaths, state.ImagesDir)
 	if len(images) == 0 {
-		images = append(images, entries[0])
 		state.ImagePaths = make(map[string]bool)
 		logToFile("Used images cleared")
+
+		images = getImages(state.ImagePaths, state.ImagesDir)
 	}
 
 	randomImageIndex := rand.Intn(len(images))
-	randomImage := images[randomImageIndex]
-	logToFile("New background image: %s", randomImage.Name())
+	randomImagePath := images[randomImageIndex]
+	logToFile("New background image: %s", randomImagePath)
 
-	randomImagePath := filepath.Join(state.ImagesDir, randomImage.Name())
 	err = wallpaper.SetFromFile(randomImagePath)
 	checkErr(err)
 
@@ -121,9 +107,38 @@ func remixWallpaper() {
 	err = copyFileContents(randomImagePath, browserImagePath)
 	checkErr(err)
 
-	state.ImagePaths[randomImage.Name()] = true
+	state.ImagePaths[randomImagePath] = true
 	err = saveState(*state)
 	checkErr(err)
+}
+
+func getImages(imagePaths map[string]bool, imagesDir string) []string {
+	images := []string{}
+	entries, err := os.ReadDir(imagesDir)
+	checkErr(err)
+
+	for _, entry := range entries {
+		info, err := entry.Info()
+		checkErr(err)
+		entryPath := path.Join(imagesDir, entry.Name())
+
+		if info.IsDir() {
+			images = append(images, getImages(imagePaths, entryPath)...)
+			continue
+		}
+
+		if !info.Mode().IsRegular() {
+			continue
+		}
+
+		if imagePaths[entryPath] {
+			continue
+		}
+
+		images = append(images, entryPath)
+	}
+
+	return images
 }
 
 func checkErr(err error) {
@@ -169,7 +184,7 @@ func logToFile(format string, a ...interface{}) error {
 	if err != nil {
 		errMsg := fmt.Sprintf("error opening file <%s>: %v", filePath, err)
 		fmt.Println(errMsg)
-		return fmt.Errorf(errMsg)
+		return fmt.Errorf("%v", errMsg)
 	}
 	defer f.Close()
 
