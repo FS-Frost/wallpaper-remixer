@@ -20,13 +20,14 @@ const (
 )
 
 type State struct {
-	ImagePaths   map[string]bool
-	ImagesDir    string
-	BrowserDir   string
-	BrowserImage string
-	Time         time.Time
-	Loop         bool
-	Stop         bool
+	Loop              bool
+	Stop              bool
+	SecondsToWait     int
+	LastRunAt         time.Time
+	BrowserDir        string
+	BrowserImage      string
+	ImagesDirectories []string
+	ImagePaths        map[string]bool
 }
 
 func main() {
@@ -38,12 +39,24 @@ func main() {
 		os.Exit(0)
 	}
 
-	ticker := time.NewTicker(time.Minute)
+	durationToWait := time.Second * time.Duration(state.SecondsToWait)
+	ticker := time.NewTicker(durationToWait)
 	quit := make(chan struct{})
+
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
+				currentSecondsToWait := state.SecondsToWait
+				state, err = loadState()
+				checkErr(err)
+
+				newSecondsToWait := state.SecondsToWait
+				if currentSecondsToWait != newSecondsToWait {
+					durationToWait = time.Second * time.Duration(newSecondsToWait)
+					ticker.Reset(durationToWait)
+				}
+
 				remixWallpaper()
 			case <-quit:
 				ticker.Stop()
@@ -51,6 +64,7 @@ func main() {
 			}
 		}
 	}()
+
 	time.Sleep(time.Hour * 48)
 }
 
@@ -65,35 +79,23 @@ func remixWallpaper() {
 
 	if _, err := os.Stat(state.BrowserDir); errors.Is(err, os.ErrNotExist) {
 		logToFile("browser directory '%s' not found, check %s", state.BrowserDir, stateFileName)
-		os.Exit(1)
-	}
-
-	if _, err := os.Stat(state.ImagesDir); errors.Is(err, os.ErrNotExist) {
-		logToFile("images directory '%s' not found, check %s", state.ImagesDir, stateFileName)
-		os.Exit(1)
+		return
 	}
 
 	if len(state.BrowserImage) == 0 {
 		logToFile("browser image not defined, check %s", stateFileName)
-		os.Exit(1)
+		return
 	}
 
 	clearLogFileIfNeeded()
-	state.Time = time.Now()
-	entries, err := os.ReadDir(state.ImagesDir)
-	checkErr(err)
+	state.LastRunAt = time.Now()
 
-	if len(entries) == 0 {
-		logToFile("No images found on: %s", state.ImagesDir)
-		os.Exit(0)
-	}
-
-	images := getImages(state.ImagePaths, state.ImagesDir)
+	images := getImagesFromDirectories(state.ImagePaths, state.ImagesDirectories)
 	if len(images) == 0 {
 		state.ImagePaths = make(map[string]bool)
 		logToFile("Used images cleared")
 
-		images = getImages(state.ImagePaths, state.ImagesDir)
+		images = getImagesFromDirectories(state.ImagePaths, state.ImagesDirectories)
 	}
 
 	randomImageIndex := rand.Intn(len(images))
@@ -110,6 +112,16 @@ func remixWallpaper() {
 	state.ImagePaths[randomImagePath] = true
 	err = saveState(*state)
 	checkErr(err)
+}
+
+func getImagesFromDirectories(imagePaths map[string]bool, imagesDirectories []string) []string {
+	images := []string{}
+
+	for _, dir := range imagesDirectories {
+		images = append(images, getImages(imagePaths, dir)...)
+	}
+
+	return images
 }
 
 func getImages(imagePaths map[string]bool, imagesDir string) []string {
@@ -143,32 +155,31 @@ func getImages(imagePaths map[string]bool, imagesDir string) []string {
 
 func checkErr(err error) {
 	if err != nil {
-		logToFile(err.Error())
+		logToFile("ERROR: %v", err.Error())
 		panic(err)
 	}
 }
 
-func copyFileContents(src, dst string) (err error) {
+func copyFileContents(src string, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
-		return
+		return err
 	}
+
 	defer in.Close()
 	out, err := os.Create(dst)
 	if err != nil {
-		return
+		return err
 	}
-	defer func() {
-		cerr := out.Close()
-		if err == nil {
-			err = cerr
-		}
-	}()
+
+	defer out.Close()
+
 	if _, err = io.Copy(out, in); err != nil {
-		return
+		return err
 	}
+
 	err = out.Sync()
-	return
+	return err
 }
 
 func logToFile(format string, a ...interface{}) error {
@@ -221,13 +232,21 @@ func clearLogFileIfNeeded() {
 
 func loadState() (*State, error) {
 	state := State{
-		BrowserDir: "",
-		ImagesDir:  "",
-		Time:       time.Now(),
-		Loop:       false,
-		Stop:       false,
-		ImagePaths: make(map[string]bool),
+		BrowserDir:        "",
+		ImagesDirectories: []string{},
+		LastRunAt:         time.Now(),
+		Loop:              false,
+		Stop:              false,
+		ImagePaths:        make(map[string]bool),
+		BrowserImage:      "",
+		SecondsToWait:     0,
 	}
+
+	defer func() {
+		if state.SecondsToWait == 0 {
+			state.SecondsToWait = 60
+		}
+	}()
 
 	appPath, err := os.Executable()
 	cwd := filepath.Dir(appPath)
