@@ -69,7 +69,7 @@ func main() {
 }
 
 func setImage(imagePath string) {
-	fmt.Printf("set image %q\n", imagePath)
+	logToFile("set image %q\n", imagePath)
 
 	err := wallpaper.SetFromFile(imagePath)
 	checkErr(err)
@@ -84,7 +84,7 @@ func setImage(imagePath string) {
 }
 
 func setStop() {
-	fmt.Println("set stop")
+	logToFile("set stop")
 	state, err := loadState()
 	checkErr(err)
 
@@ -95,7 +95,7 @@ func setStop() {
 }
 
 func unsetStop() {
-	fmt.Println("unset stop")
+	logToFile("unset stop")
 	state, err := loadState()
 	checkErr(err)
 
@@ -106,21 +106,21 @@ func unsetStop() {
 }
 
 func goBack(imagesToGoBack int) {
-	fmt.Printf("go back %d image(s)\n", imagesToGoBack)
+	logToFile("go back %d image(s)\n", imagesToGoBack)
 	state, err := loadState()
 	checkErr(err)
 
 	totalImages := len(state.ImagePaths)
 	imageIndex := totalImages - imagesToGoBack - 1
 	if imageIndex < 0 {
-		fmt.Printf("no images to go back. History length: %d\n", totalImages)
+		logToFile("no images to go back. History length: %d\n", totalImages)
 		os.Exit(1)
 	}
 
 	newImage := state.ImagePaths[imageIndex]
 	state.ImagePaths = state.ImagePaths[0 : imageIndex+1]
 
-	fmt.Printf("new image %q", newImage)
+	logToFile("new image %q", newImage)
 	err = wallpaper.SetFromFile(newImage)
 	checkErr(err)
 
@@ -129,7 +129,7 @@ func goBack(imagesToGoBack int) {
 }
 
 func startLoop() {
-	fmt.Println("start loop")
+	logToFile("start loop")
 	state, err := loadState()
 	checkErr(err)
 
@@ -163,7 +163,7 @@ func startLoop() {
 }
 
 func remixWallpaper() {
-	fmt.Println("remix")
+	logToFile("remix")
 	state, err := loadState()
 	checkErr(err)
 
