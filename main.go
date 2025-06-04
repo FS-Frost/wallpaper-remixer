@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	_log "log"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/reujab/wallpaper"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -20,24 +22,116 @@ const (
 )
 
 type State struct {
-	Loop              bool
 	Stop              bool
 	SecondsToWait     int
 	LastRunAt         time.Time
 	BrowserDir        string
 	BrowserImage      string
 	ImagesDirectories []string
-	ImagePaths        map[string]bool
+	ImagePaths        []string
 }
 
 func main() {
+	flagLoop := false
+	flag.BoolVar(&flagLoop, "loop", false, "loop the program")
+
+	flagStop := false
+	flag.BoolVar(&flagStop, "stop", false, "stop the program")
+
+	flagBack := 0
+	flag.IntVar(&flagBack, "back", 0, "go back N images. Default: 0 images")
+
+	flagWallpaper := ""
+	flag.StringVar(&flagWallpaper, "image", "", "image to set as wallpaper")
+
+	flag.Parse()
+
+	if flagLoop {
+		setStop()
+		os.Exit(0)
+	}
+
+	if flagWallpaper != "" {
+		setImage(flagWallpaper)
+	}
+
+	if flagBack > 0 {
+		goBack(flagBack)
+		os.Exit(0)
+	}
+
+	unsetStop()
+	remixWallpaper()
+
+	if flagLoop {
+		startLoop()
+	}
+}
+
+func setImage(imagePath string) {
+	fmt.Printf("set image %q\n", imagePath)
+
+	err := wallpaper.SetFromFile(imagePath)
+	checkErr(err)
+
 	state, err := loadState()
 	checkErr(err)
 
-	remixWallpaper()
-	if !state.Loop {
-		os.Exit(0)
+	state.ImagePaths = append(state.ImagePaths, imagePath)
+	saveState(*state)
+
+	os.Exit(0)
+}
+
+func setStop() {
+	fmt.Println("set stop")
+	state, err := loadState()
+	checkErr(err)
+
+	state.Stop = true
+
+	err = saveState(*state)
+	checkErr(err)
+}
+
+func unsetStop() {
+	fmt.Println("unset stop")
+	state, err := loadState()
+	checkErr(err)
+
+	state.Stop = false
+
+	err = saveState(*state)
+	checkErr(err)
+}
+
+func goBack(imagesToGoBack int) {
+	fmt.Printf("go back %d image(s)\n", imagesToGoBack)
+	state, err := loadState()
+	checkErr(err)
+
+	totalImages := len(state.ImagePaths)
+	imageIndex := totalImages - imagesToGoBack - 1
+	if imageIndex < 0 {
+		fmt.Printf("no images to go back. History length: %d\n", totalImages)
+		os.Exit(1)
 	}
+
+	newImage := state.ImagePaths[imageIndex]
+	state.ImagePaths = state.ImagePaths[0 : imageIndex+1]
+
+	fmt.Printf("new image %q", newImage)
+	err = wallpaper.SetFromFile(newImage)
+	checkErr(err)
+
+	err = saveState(*state)
+	checkErr(err)
+}
+
+func startLoop() {
+	fmt.Println("start loop")
+	state, err := loadState()
+	checkErr(err)
 
 	durationToWait := time.Second * time.Duration(state.SecondsToWait)
 	ticker := time.NewTicker(durationToWait)
@@ -48,7 +142,7 @@ func main() {
 			select {
 			case <-ticker.C:
 				currentSecondsToWait := state.SecondsToWait
-				state, err = loadState()
+				state, err := loadState()
 				checkErr(err)
 
 				newSecondsToWait := state.SecondsToWait
@@ -69,6 +163,7 @@ func main() {
 }
 
 func remixWallpaper() {
+	fmt.Println("remix")
 	state, err := loadState()
 	checkErr(err)
 
@@ -92,7 +187,7 @@ func remixWallpaper() {
 
 	images := getImagesFromDirectories(state.ImagePaths, state.ImagesDirectories)
 	if len(images) == 0 {
-		state.ImagePaths = make(map[string]bool)
+		state.ImagePaths = []string{}
 		logToFile("Used images cleared")
 
 		images = getImagesFromDirectories(state.ImagePaths, state.ImagesDirectories)
@@ -109,12 +204,12 @@ func remixWallpaper() {
 	err = copyFileContents(randomImagePath, browserImagePath)
 	checkErr(err)
 
-	state.ImagePaths[randomImagePath] = true
+	state.ImagePaths = append(state.ImagePaths, randomImagePath)
 	err = saveState(*state)
 	checkErr(err)
 }
 
-func getImagesFromDirectories(imagePaths map[string]bool, imagesDirectories []string) []string {
+func getImagesFromDirectories(imagePaths []string, imagesDirectories []string) []string {
 	images := []string{}
 
 	for _, dir := range imagesDirectories {
@@ -124,7 +219,7 @@ func getImagesFromDirectories(imagePaths map[string]bool, imagesDirectories []st
 	return images
 }
 
-func getImages(imagePaths map[string]bool, imagesDir string) []string {
+func getImages(imagePaths []string, imagesDir string) []string {
 	images := []string{}
 	entries, err := os.ReadDir(imagesDir)
 	checkErr(err)
@@ -143,7 +238,7 @@ func getImages(imagePaths map[string]bool, imagesDir string) []string {
 			continue
 		}
 
-		if imagePaths[entryPath] {
+		if slices.Contains(imagePaths, entryPath) {
 			continue
 		}
 
@@ -235,9 +330,8 @@ func loadState() (*State, error) {
 		BrowserDir:        "",
 		ImagesDirectories: []string{},
 		LastRunAt:         time.Now(),
-		Loop:              false,
 		Stop:              false,
-		ImagePaths:        make(map[string]bool),
+		ImagePaths:        []string{},
 		BrowserImage:      "",
 		SecondsToWait:     0,
 	}
