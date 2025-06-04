@@ -1,1 +1,3 @@
-CreateObject("Wscript.Shell").Run """" & WScript.Arguments(0) & """", 0, False
+Dim shell
+Set shell = CreateObject("Wscript.Shell")
+shell.Run("edge-remixer.exe -loop"), 0, false
