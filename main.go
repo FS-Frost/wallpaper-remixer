@@ -46,7 +46,7 @@ func main() {
 
 	flag.Parse()
 
-	if flagLoop {
+	if flagStop {
 		setStop()
 		os.Exit(0)
 	}
