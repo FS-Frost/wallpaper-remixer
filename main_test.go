@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"path"
 	"path/filepath"
 	"testing"
 	"time"
@@ -56,8 +55,8 @@ func TestGetImagesRecursesAndExcludes(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "banned.jpg"))
 	writeFile(t, filepath.Join(sub, "c.gif"))
 
-	used := []string{path.Join(dir, "used.jpg")}
-	blacklist := []string{path.Join(dir, "banned.jpg")}
+	used := []string{filepath.Join(dir, "used.jpg")}
+	blacklist := []string{filepath.Join(dir, "banned.jpg")}
 
 	images := getImages(used, blacklist, dir)
 	if len(images) != 2 {
